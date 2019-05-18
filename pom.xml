@@ -1,0 +1,228 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+	<groupId>kmqc</groupId>
+	<artifactId>qsimulator</artifactId>
+	<packaging>jar</packaging>
+	<version>1.0-SNAPSHOT</version>
+	<name>qsimulator</name>
+
+	<properties>
+		<junit.version>4.12</junit.version>
+		<javacpp.version>1.5</javacpp.version>
+		<jdk.version>11</jdk.version>
+		<compiler.plugin.version>3.8.1</compiler.plugin.version>
+	</properties>
+
+	<dependencies>
+		<dependency>
+			<groupId>junit</groupId>
+			<artifactId>junit</artifactId>
+			<version>${junit.version}</version>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.bytedeco</groupId>
+			<artifactId>javacpp</artifactId>
+			<version>${javacpp.version}</version>
+		</dependency>
+	</dependencies>
+
+	<build>
+		<plugins>
+
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-compiler-plugin</artifactId>
+				<version>${compiler.plugin.version}</version>
+				<configuration>
+					<source>${jdk.version}</source>
+					<target>${jdk.version}</target>
+				</configuration>
+			</plugin>
+
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-dependency-plugin</artifactId>
+				<version>3.1.1</version>
+				<executions>
+					<execution>
+						<id>properties</id>
+						<goals>
+							<goal>properties</goal>
+						</goals>
+					</execution>
+					<!--
+						puts the dependencies to the target/lib folder;
+						we would need the javacpp-1.1.jar to build the java wrapper shared library
+					 -->
+					<execution>
+						<id>dependencies</id>
+						<goals>
+							<goal>copy-dependencies</goal>
+						</goals>
+						<configuration>
+							<outputDirectory>${project.build.directory}/lib</outputDirectory>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+
+			<!--
+				everything (including dependencies) will be wrapped in a jar;
+				also indicate the main class to be executed my default
+			 -->
+			<plugin>
+				<artifactId>maven-assembly-plugin</artifactId>
+				<executions>
+					<execution>
+						<phase>package</phase>
+						<goals>
+							<goal>single</goal>
+						</goals>
+					</execution>
+				</executions>
+				<configuration>
+					<descriptorRefs>
+						<descriptorRef>jar-with-dependencies</descriptorRef>
+					</descriptorRefs>
+					<archive>
+						<manifest>
+							<mainClass>kmqc.QsimulatorLib</mainClass>
+						</manifest>
+					</archive>
+				</configuration>
+			</plugin>
+
+			<!--
+				specify where the libfoo.so is stored, after compile;
+				it is needed when the unit test is run
+			 -->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-surefire-plugin</artifactId>
+				<version>3.0.0-M3</version>
+				<configuration>
+					<skipTests>false</skipTests>
+					<forkMode>once</forkMode>
+					<environmentVariables>
+						<LD_LIBRARY_PATH>${basedir}/src/main/cpp/quantum-simulator/build/qsimulator</LD_LIBRARY_PATH>
+					</environmentVariables>
+					<systemProperties>
+						<property>
+							<name>java.library.tmpdir</name>
+							<value>${basedir}/src/main/cpp/quantum-simulator/build/qsimulator</value>
+						</property>
+					</systemProperties>
+				</configuration>
+			</plugin>
+
+			<plugin>
+				<groupId>org.codehaus.mojo</groupId>
+				<artifactId>exec-maven-plugin</artifactId>
+				<version>1.6.0</version>
+				<!-- this is how the shared library libfoo.so is built -->
+				<executions>
+
+					<!-- in here we build the Java-based wrapper shared library -->
+					<execution>
+						<id>build-jnilib</id>
+						<phase>process-classes</phase>
+						<goals>
+							<goal>exec</goal>
+						</goals>
+						<configuration>
+							<executable>java</executable>
+							<!--
+								-jar points to the javacpp.jar
+								-Xcompiler may be followed by
+									-L specifies where the libfoo.so is
+									-I points to the foo.h header
+								eu.atspace.hash.FooLib is the wrapper class
+							 -->
+							<commandlineArgs>
+								-jar ${project.build.directory}/lib/javacpp-${javacpp.version}.jar -Xcompiler -L${basedir}/src/main/cpp/quantum-simulator/build/qsimulator -Xcompiler -I${basedir}/src/main/cpp/quantum-simulator/qsimulator/include -Xcompiler -I${basedir}/src/main/cpp/quantum-simulator/qsimulator/quantum-engine/qengine/include -Xcompiler -I${basedir}/src/main/cpp/quantum-simulator/qsimulator/quantum-engine/qengine/utils -Xcompiler -I${basedir}/src/main/cpp/quantum-simulator/build/qsimulator/quantum-engine/third_party/gsl/gsl-src/include/ -classpath target/classes kmqc.QsimulatorLib
+							</commandlineArgs>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+
+		</plugins>
+
+<!--		<pluginManagement>
+			<plugins>-->
+				<!--This plugin's configuration is used to store Eclipse m2e settings
+					only. It has no influence on the Maven build itself. -->
+				<!-- <plugin>
+					<groupId>org.eclipse.m2e</groupId>
+					<artifactId>lifecycle-mapping</artifactId>
+					<version>1.0.0</version>
+					<configuration>
+						<lifecycleMappingMetadata>
+							<pluginExecutions>
+								<pluginExecution>
+									<pluginExecutionFilter>
+										<groupId>
+											org.apache.maven.plugins
+										</groupId>
+										<artifactId>
+											maven-dependency-plugin
+										</artifactId>
+										<versionRange>
+											[2.3,)
+										</versionRange>
+										<goals>
+											<goal>properties</goal>
+											<goal>
+												copy-dependencies
+											</goal>
+										</goals>
+									</pluginExecutionFilter>
+									<action>
+										<ignore></ignore>
+									</action>
+								</pluginExecution>
+								<pluginExecution>
+									<pluginExecutionFilter>
+										<groupId>
+											org.codehaus.mojo
+										</groupId>
+										<artifactId>
+											exec-maven-plugin
+										</artifactId>
+										<versionRange>
+											[1.1,)
+										</versionRange>
+										<goals>
+											<goal>exec</goal>
+										</goals>
+									</pluginExecutionFilter>
+									<action>
+										<ignore></ignore>
+									</action>
+								</pluginExecution>
+								<pluginExecution>
+									<pluginExecutionFilter>
+										<groupId>org.bytedeco</groupId>
+										<artifactId>javacpp</artifactId>
+										<versionRange>
+											[1.0,)
+										</versionRange>
+										<goals>
+											<goal>build</goal>
+										</goals>
+									</pluginExecutionFilter>
+									<action>
+										<ignore></ignore>
+									</action>
+								</pluginExecution>
+							</pluginExecutions>
+						</lifecycleMappingMetadata>
+					</configuration>
+				</plugin>
+			</plugins>
+		</pluginManagement> -->
+
+	</build>
+</project>
